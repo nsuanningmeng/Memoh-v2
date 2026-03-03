@@ -408,6 +408,14 @@ export const useChatStore = defineStore('chat', () => {
       console.debug('[appendRealtimeMessage] skipped tool-call message, id=%s', raw.id)
       return
     }
+    // Skip tool result messages as well — they will be properly merged with their
+    // corresponding tool calls when loading history via convertMessagesToChats.
+    // This prevents "No tool call found" errors when tool results arrive via SSE
+    // but their corresponding tool-call messages were skipped above.
+    if (raw.role === 'tool') {
+      console.debug('[appendRealtimeMessage] skipped tool-result message, id=%s', raw.id)
+      return
+    }
     const item = messageToChat(raw)
     if (!item) return
     messages.push(item)
