@@ -846,13 +846,15 @@ export const createAgent = (
           }
           const activeRuns = registry.listActive()
           let iterResult: IteratorResult<any>
-          if (activeRuns.length > 0) {
-            const nextChunk = iterator.next()
-            let timerId: ReturnType<typeof setTimeout>
-            const timer = new Promise<'tick'>((r) => { timerId = setTimeout(() => r('tick'), HEARTBEAT_MS) })
-            const race = await Promise.race([nextChunk.then((v) => ({ tag: 'chunk' as const, v })), timer.then((t) => ({ tag: t }))])
-            clearTimeout(timerId!)
-            if (race.tag === 'tick') {
+          // Always use heartbeat mechanism to keep stream alive, even without active subagents
+          const nextChunk = iterator.next()
+          let timerId: ReturnType<typeof setTimeout>
+          const timer = new Promise<'tick'>((r) => { timerId = setTimeout(() => r('tick'), HEARTBEAT_MS) })
+          const race = await Promise.race([nextChunk.then((v) => ({ tag: 'chunk' as const, v })), timer.then((t) => ({ tag: t }))])
+          clearTimeout(timerId!)
+          if (race.tag === 'tick') {
+            if (activeRuns.length > 0) {
+              // Send subagent progress for active runs
               for (const run of activeRuns) {
                 yield {
                   type: 'subagent_progress' as const,
@@ -863,12 +865,15 @@ export const createAgent = (
                   elapsed_ms: Date.now() - run.startedAt,
                 }
               }
-              iterResult = await nextChunk
             } else {
-              iterResult = race.v
+              // Send a generic heartbeat event to keep the stream alive during long processing
+              yield {
+                type: 'heartbeat' as const,
+              }
             }
+            iterResult = await nextChunk
           } else {
-            iterResult = await iterator.next()
+            iterResult = race.v
           }
           if (iterResult.done) { done = true; break }
           const chunk = iterResult.value
