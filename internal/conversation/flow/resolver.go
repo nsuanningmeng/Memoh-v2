@@ -1750,9 +1750,11 @@ func (r *Resolver) streamChat(ctx context.Context, payload gatewayRequest, req c
 	}
 
 	// Wrap the response body with an idle-timeout reader. The TS agent sends
-	// heartbeat events every 3s, so 120s without any data means the stream is
+	// heartbeat events every 3s, so 600s without any data means the stream is
 	// stuck. This prevents scanner.Scan() from blocking forever.
-	const streamIdleTimeout = 120 * time.Second
+	// Increased from 120s to 600s to accommodate complex tasks that may take
+	// longer to process without sending heartbeats.
+	const streamIdleTimeout = 600 * time.Second
 	idleReader := newIdleTimeoutReader(resp.Body, streamIdleTimeout)
 	defer idleReader.Close()
 	scanner := bufio.NewScanner(idleReader)
